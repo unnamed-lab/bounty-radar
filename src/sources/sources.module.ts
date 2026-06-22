@@ -6,7 +6,7 @@ import { PAYOUT_SOURCES } from './payout-source.interface';
 import { SuperteamSource } from './superteam.source';
 import { BountycasterSource } from './bountycaster.source';
 import { DevpostSource } from './devpost.source';
-import { GenericPayoutSource } from './generic-payout.source';
+import { SuperteamPayoutSource } from './superteam-payout.source';
 
 @Module({
   imports: [HttpModule, ScraperModule],
@@ -14,7 +14,7 @@ import { GenericPayoutSource } from './generic-payout.source';
     SuperteamSource,
     BountycasterSource,
     DevpostSource,
-    GenericPayoutSource,
+    SuperteamPayoutSource,
     {
       provide: BOUNTY_SOURCES,
       useFactory: (...sources) => sources,
@@ -23,7 +23,7 @@ import { GenericPayoutSource } from './generic-payout.source';
     {
       provide: PAYOUT_SOURCES,
       useFactory: (...sources) => sources,
-      inject: [GenericPayoutSource], // <- payout sources injected here
+      inject: [SuperteamPayoutSource], // <- payout sources injected here
     },
   ],
   exports: [BOUNTY_SOURCES, PAYOUT_SOURCES],
