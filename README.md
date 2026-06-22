@@ -1,62 +1,57 @@
 # 📡 Bounty Radar
 
-Scans web3 chains for bounties & hackathons, dedupes them, and **drafts daily
-posts to your Telegram for review** — a daily drop thread, closing-soon alerts,
-winner spotlights, and monthly payout stats. You review each draft and post it
-to X manually. Nothing is auto-published.
+Scans web3 platforms for bounties, hackathons, and jobs — dedupes, filters, and
+drafts daily threads to Telegram for review. Nothing is auto-published to X.
 
-Built with **NestJS 11 + TypeScript**, Prisma (SQLite → Postgres), Playwright,
-and the Telegram Bot API.
+Built with **NestJS 11 + TypeScript**, Prisma + Postgres, and the Telegram Bot API.
 
-> I'm building Bounty Radar — a side project that scans every chain to find the
-> best opportunities and surface them consistently, tailored for web3 builders.
-> Follow [@unnamedcodes](https://x.com/unnamedcodes) + turn on notifications.
+> Follow [@unnamedcodes](https://x.com/unnamedcodes) + 🔔
 
 ---
 
 ## How it works
 
 ```
-@Cron scan ─► sources (JSON + Playwright) ─► persist to DB (Bounty / Payout)
-                                                      │
-        ┌─────────────────────────────────────────────┤
-        ▼                ▼                ▼            ▼
-   Daily drop      Closing-soon       Spotlight      Monthly
-   (thread)        (next 72h)         (winners)      stats
-        └──────────────── all drafted to Telegram for review ───────────────┘
+@Cron scan ─► sources (REST / HTML) ─► persist to Postgres
+                                              │
+        ┌──────────────────────────────────────┤
+        ▼              ▼              ▼        ▼
+   Daily drop     Job drop      Closing-soon  Spotlight
+   (bounties)     (jobs)        (next 72h)     + stats
+        └──────── all drafted to Telegram for review ──────┘
 ```
 
-The scan only **persists** to the database; it never posts. The content services
-read from the database on their own schedules and push ready-to-copy drafts to
-Telegram. This makes the daily drop a *curation* step rather than a firehose.
+The scan only **persists** new bounties. Content services read from the DB on
+their own schedules and push ready-to-copy drafts to Telegram.
+
+---
+
+## Sources
+
+| Platform       | Type        | Method            |
+|----------------|-------------|-------------------|
+| Superteam      | bounties    | REST API          |
+| Devpost        | hackathons  | REST API          |
+| CryptoJobsList | jobs        | `__NEXT_DATA__`   |
+| Sherlock       | audits      | REST (paginated)  |
+| Code4rena      | audits      | GitHub API        |
+| Superteam      | payouts     | REST API          |
 
 ---
 
 ## Quick start
 
 ```bash
-# 1. Install deps
 pnpm install
-
-# 2. Install the Chromium browser for Playwright (needs internet)
-npx playwright install chromium
-
-# 3. Configure
-cp .env.example .env       # fill TG_TOKEN, TG_CHAT_ID, X_HANDLE, TG_CHANNEL
-
-# 4. Generate the Prisma client + create the DB
-npx prisma generate
-npx prisma db push
-
-# 5. Build & run the resident worker (schedules fire internally)
-npm run build
-npm start
-
-# …or run a single scan and exit:
-npm run scan:once
+cp .env.example .env        # fill TG_TOKEN, TG_CHAT_ID, DATABASE_URL
+pnpm exec prisma db push    # create tables
+pnpm run build
+pnpm run scan:once          # one-shot scan
+pnpm run content:once       # dispatch all content drafts
 ```
 
 ### Telegram setup
+
 Message **@BotFather** → `/newbot` → copy the token into `TG_TOKEN`. Send your
 new bot any message, then open
 `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy your numeric chat id
@@ -68,77 +63,74 @@ into `TG_CHAT_ID`.
 
 ```
 src/
-├── main.ts / run-once.ts        # resident worker / one-shot bootstraps
+├── main.ts / run-once.ts / content-once.ts
 ├── app.module.ts
-├── config/                      # env validation
 ├── domain/                      # Bounty type, reward parsing
-├── persistence/                 # Prisma + BountyRepository (dedupe + queries)
-├── scraper/                     # shared Playwright browser
-├── telegram/                    # draft delivery (sendRaw / sendThread)
-├── sources/                     # one module per site + DI registries
-│   ├── superteam.source.ts      #   JSON-endpoint template
-│   ├── generic-scrape.source.ts #   Playwright template (lazy-load handling)
-│   └── generic-payout.source.ts #   winners/payouts template
-├── scout/                       # scan orchestrator (@Cron, persists only)
-└── content/                     # digest, closing-soon, spotlight, stats, drop
+├── persistence/                 # Prisma + BountyRepository
+├── telegram/                    # sendRaw / sendThread
+├── sources/                     # one source per platform
+│   ├── superteam.source.ts
+│   ├── superteam-payout.source.ts
+│   ├── devpost.source.ts
+│   ├── cryptojobslist.source.ts
+│   ├── sherlock.source.ts
+│   └── code4rena.source.ts
+├── scout/                       # scan orchestrator
+└── content/                     # digest, closing-soon, spotlight, stats, job-drop
 prisma/schema.prisma
 ```
 
 ---
 
-## Adding a real source
-
-1. Copy a template in `src/sources/`:
-   - JSON site → `superteam.source.ts` (open DevTools → Network → Fetch/XHR,
-     find the listings request, map its fields to `Bounty`).
-   - Scrape site → `generic-scrape.source.ts` (set `LISTING_URL` + selectors;
-     `scrollUntilStable` handles lazy-load / infinite scroll).
-   - Winners → `generic-payout.source.ts`.
-2. Add your class to the matching `inject:` array in `sources/sources.module.ts`.
-
-Good targets: Superteam Earn, Layer3, Dework, DoraHacks, Devpost / ETHGlobal
-(hackathons), Code4rena & Immunefi (security), Gitcoin, Bountycaster.
-
----
-
 ## Schedules
 
-All cron strings are configurable in `.env` (server timezone — set `TZ`).
+All cron strings configurable via env vars.
 
-| Job            | Env var             | Default          | When               |
-|----------------|---------------------|------------------|--------------------|
-| Source scan    | `SCAN_CRON`         | `0 0 */6 * * *`  | every 6h           |
-| Daily drop     | `DROP_CRON`         | `0 0 9 * * *`    | 09:00 daily        |
-| Closing-soon   | `CLOSING_SOON_CRON` | `0 0 */6 * * *`  | every 6h           |
-| Spotlight      | `SPOTLIGHT_CRON`    | `0 0 16 * * 2,5` | Tue & Fri 16:00    |
-| Monthly stats  | `STATS_CRON`        | `0 0 9 1 * *`    | 1st of month 09:00 |
-
-Set `TZ` to your audience's timezone so the drop lands in their morning.
-
----
-
-## Deployment
-
-Playwright needs system libraries, so the `Dockerfile` uses the official
-Playwright image (browsers preinstalled). Run the container 24/7 as the resident
-worker; the internal scheduler drives everything. Mount a volume for the SQLite
-file (or switch `DATABASE_URL` to managed Postgres and change the Prisma
-`provider`) so dedupe/drop state survives restarts.
-
-For serverless / k8s `CronJob`, set the container command to
-`node dist/run-once.js` and use Postgres (no persistent local disk).
+| Job            | Env var             | Default          |
+|----------------|---------------------|------------------|
+| Source scan    | `SCAN_CRON`         | `0 0 */6 * * *` |
+| Daily drop     | `DROP_CRON`         | `0 0 9 * * *`   |
+| Job drop       | `JOB_DROP_CRON`     | `0 0 15 * * *`  |
+| Closing-soon   | `CLOSING_SOON_CRON` | `0 0 */6 * * *` |
+| Spotlight      | `SPOTLIGHT_CRON`    | `0 0 16 * * 2,5`|
+| Monthly stats  | `STATS_CRON`        | `0 0 9 1 * *`   |
 
 ---
 
-## Before it does anything useful
+## Filtering
 
-- The `superteam.source.ts` endpoint and all scrape selectors are
-  **placeholders** showing the shape — replace them with real values from the
-  live sites (these change over time).
-- Set `X_HANDLE` and `TG_CHANNEL` in `.env`; they appear in the post drafts.
-- Scraping some sites is against their ToS. Prefer official APIs/feeds, keep the
-  scan interval modest, and identify with one honest User-Agent.
+- **Reward**: `$200 – $200,000` (configurable via `BOUNTY_MIN_USD` / `BOUNTY_MAX_USD`)
+- **Age**: bounties with deadline more than 3 months in the past are skipped on persist
+- **Dedup**: `sha256(source|normalised_url)` prevents duplicates
+- **Drop diversity**: max 2 bounties per source per drop, randomly shuffled
+- **Jobs**: excluded from the main bounty drop; delivered in a separate job drop thread
 
-## Notes on versions
-Dependency ranges target NestJS 11. If `npm install` reports peer-dependency
-conflicts, align them with `npx npm-check-updates -u && npm install`.
+---
+
+## Deployment (Render)
+
+Push to `main` — GitHub Actions builds the Docker image and Render auto-deploys
+from the Render Blueprint (`render.yaml`).
+
+The Docker `CMD` runs `prisma db push && node dist/main.js`, so schema stays in
+sync on every deploy.
+
+For one-off scans in production:
+```bash
+pnpm scan:once    # manual scan
+pnpm content:once # dispatch all content
+```
+
+---
+
+## Environment
+
+| Variable          | Required | Description                          |
+|-------------------|----------|--------------------------------------|
+| `DATABASE_URL`    | ✅       | Postgres connection string           |
+| `TG_TOKEN`        | ✅       | Telegram bot token                   |
+| `TG_CHAT_ID`      | ✅       | Telegram chat id for drafts          |
+| `X_HANDLE`        |          | X/Twitter handle (default @unnamedcodes) |
+| `BOUNTY_MIN_USD`  |          | Min reward for drops (default 200)   |
+| `BOUNTY_MAX_USD`  |          | Max reward for drops (default 200000)|
+| `BOUNTY_MAX_AGE_DAYS` |       | Max bounty age (default 180)         |
