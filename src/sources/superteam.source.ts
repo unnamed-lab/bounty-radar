@@ -43,7 +43,7 @@ export class SuperteamSource implements BountySource {
           source: this.name,
           title: it.title ?? 'Untitled',
           url: it.slug
-            ? `https://superteam.fun/listings/${type}/${it.slug}`
+            ? `https://superteam.fun/earn/listing/${it.slug}/`
             : `https://superteam.fun/earn`,
           reward: rewardText,
           deadline: it.deadline ? new Date(it.deadline).toISOString() : undefined,
