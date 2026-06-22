@@ -1,5 +1,5 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
-import { chromium, Browser, Page } from 'playwright';
+import type { Browser, Page } from 'playwright';
 
 @Injectable()
 export class BrowserService implements OnModuleDestroy {
@@ -8,6 +8,7 @@ export class BrowserService implements OnModuleDestroy {
 
   private async get(): Promise<Browser> {
     if (!this.browser) {
+      const { chromium } = await import('playwright');
       this.browser = await chromium.launch({ headless: true });
       this.logger.log('Chromium launched');
     }
