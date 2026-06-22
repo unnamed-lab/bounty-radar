@@ -48,6 +48,7 @@ export class SuperteamSource implements BountySource {
           reward: rewardText,
           deadline: it.deadline ? new Date(it.deadline).toISOString() : undefined,
           tags: [type].filter(Boolean),
+          host: it.sponsor?.name,
         };
       },
     );

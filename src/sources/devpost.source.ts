@@ -56,6 +56,7 @@ export class DevpostSource implements BountySource {
             reward: rewardText,
             deadline,
             tags,
+            host: it.organization_name,
           };
         },
       );

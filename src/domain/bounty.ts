@@ -7,6 +7,7 @@ export interface Bounty {
   reward?: string; // text: "5,000 USDC", "Up to $10k"
   deadline?: string; // ISO or site text
   tags?: string[];
+  host?: string; // e.g. XPRIZE, Superteam Germany
 }
 
 /**

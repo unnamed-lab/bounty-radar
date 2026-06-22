@@ -16,6 +16,7 @@ model Bounty {
   rewardUsd          Float?
   deadline           DateTime?
   tags               String    @default("") // comma-joined; sqlite has no arrays
+  host               String    @default("")
   status             String    @default("open") // "open" | "closed"
   firstSeen          DateTime  @default(now())
   alertedClosingSoon Boolean   @default(false)

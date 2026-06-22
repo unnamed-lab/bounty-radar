@@ -56,6 +56,7 @@ export class BountycasterSource implements BountySource {
               reward,
               deadline: undefined,
               tags: ['farcaster'],
+              host: 'Farcaster',
             });
           }
 
@@ -74,6 +75,7 @@ export class BountycasterSource implements BountySource {
                     reward: '',
                     deadline: undefined,
                     tags: ['farcaster'],
+                    host: 'Farcaster',
                   });
                 }
               }
