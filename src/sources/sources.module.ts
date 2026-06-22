@@ -4,26 +4,42 @@ import { ScraperModule } from '../scraper/scraper.module';
 import { BOUNTY_SOURCES } from './bounty-source.interface';
 import { PAYOUT_SOURCES } from './payout-source.interface';
 import { SuperteamSource } from './superteam.source';
-import { BountycasterSource } from './bountycaster.source';
+// import { BountycasterSource } from './bountycaster.source';
 import { DevpostSource } from './devpost.source';
+import { CryptoJobsListSource } from './cryptojobslist.source';
+import { SherlockSource } from './sherlock.source';
+import { Code4renaSource } from './code4rena.source';
+import { ImmunefiSource } from './immunefi.source';
 import { SuperteamPayoutSource } from './superteam-payout.source';
 
 @Module({
   imports: [HttpModule, ScraperModule],
   providers: [
     SuperteamSource,
-    BountycasterSource,
+    // BountycasterSource — disabled: site requires Farcaster/Privy auth (no public API)
     DevpostSource,
+    CryptoJobsListSource,
+    SherlockSource,
+    Code4renaSource,
+    ImmunefiSource,
     SuperteamPayoutSource,
     {
       provide: BOUNTY_SOURCES,
       useFactory: (...sources) => sources,
-      inject: [SuperteamSource, BountycasterSource, DevpostSource], // <- bounty sources injected here
+      inject: [
+        SuperteamSource,
+        /*BountycasterSource,*/
+        DevpostSource,
+        CryptoJobsListSource,
+        SherlockSource,
+        Code4renaSource,
+        ImmunefiSource,
+      ],
     },
     {
       provide: PAYOUT_SOURCES,
       useFactory: (...sources) => sources,
-      inject: [SuperteamPayoutSource], // <- payout sources injected here
+      inject: [SuperteamPayoutSource],
     },
   ],
   exports: [BOUNTY_SOURCES, PAYOUT_SOURCES],

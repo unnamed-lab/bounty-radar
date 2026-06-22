@@ -11,7 +11,7 @@ const DEFAULT_PRICES: Record<string, number> = {
  */
 export function parseRewardUsd(text: string, prices?: Record<string, number>): number | undefined {
   const t = (text ?? '').replace(/,/g, '').toLowerCase();
-  const m = t.match(/(\d+(?:\.\d+)?)\s*([km])?/);
+  const m = t.match(/(\d+(?:\.\d+)?)\s*([km])?\b/);
   if (!m) return undefined;
   let n = parseFloat(m[1]);
   if (m[2] === 'k') n *= 1_000;
