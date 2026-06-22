@@ -55,6 +55,10 @@ export class BountyRepository {
         includedInDrop: false,
         deadline: { gte: now },
         firstSeen: { gte: minFirstSeen },
+        rewardUsd: {
+          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '20000'),
+          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '150000'),
+        },
       },
       orderBy: [{ rewardUsd: 'desc' }, { deadline: 'asc' }],
       take: limit * 6,
