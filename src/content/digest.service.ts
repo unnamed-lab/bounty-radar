@@ -7,14 +7,12 @@ const TWEET_MAX = 280;
 @Injectable()
 export class DigestService {
   private readonly handle: string;
-  private readonly channel: string;
 
   constructor(
     private readonly repo: BountyRepository,
     cfg: ConfigService,
   ) {
     this.handle = cfg.get<string>('X_HANDLE') ?? '@unnamedcodes';
-    this.channel = cfg.get<string>('TG_CHANNEL') ?? '';
   }
 
   /** Returns the daily Bounty Radar thread as tweets, or [] if nothing fresh. */
@@ -22,14 +20,12 @@ export class DigestService {
     const bounties = await this.repo.forDrop(8);
     if (!bounties.length) return [];
 
-    const date = new Date().toISOString().slice(0, 10);
     const totalUsd = bounties.reduce((s, b) => s + (b.rewardUsd ?? 0), 0);
 
     const hook =
-      `📡 Bounty Radar — ${date}\n\n` +
-      `${bounties.length} fresh web3 bounties across chains` +
-      (totalUsd ? `, $${totalUsd.toLocaleString()}+ on the table 👇` : ' 👇') +
-      `\n\nFollow ${this.handle} + 🔔 so you never miss a drop.`;
+      `🚨 ${totalUsd ? `$${totalUsd.toLocaleString()}+ in ` : ''}Solana & multi-chain bounties dropped today\n\n` +
+      `From audit contests to dev bounties and web3 jobs — ${bounties.length} open opportunities 👇\n\n` +
+      `Follow ${this.handle} + 🔔`;
 
     const body = bounties.map((b, i) => {
       const parts: string[] = [];
@@ -50,7 +46,6 @@ export class DigestService {
 
     const cta =
       `That's today's radar. ♻️ RT to put these on more builders' screens.\n\n` +
-      (this.channel ? `⚡ Real-time alerts: ${this.channel}\n` : '') +
       `New drop every day. Follow ${this.handle} + turn on notifications.`;
 
     await this.repo.markInDrop(bounties.map((b) => b.uid));

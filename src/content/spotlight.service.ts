@@ -28,13 +28,24 @@ export class SpotlightService {
     const amt = p.amountText
       ? ` just earned ${p.amountText}`
       : ' just won a bounty';
-    const draft =
-      `${who}${amt} for: ${p.title}\n\n` +
-      `This is what's possible in web3 right now. ${p.url}\n\n` +
-      `Want in? Bounty Radar drops open opportunities daily. ` +
-      `Follow ${this.handle} + turn on notifs.`;
 
-    await this.tg.sendRaw(`📝 SPOTLIGHT DRAFT\n\n${draft}`);
+    const tweets: string[] = [];
+
+    // Hook
+    tweets.push(
+      `💰 Someone just scored big in web3\n\n` +
+      `Proof builders are getting paid in this ecosystem. Here's what happened 👇`,
+    );
+
+    // Body
+    tweets.push(
+      `${who}${amt} for: ${p.title}\n\n` +
+      `This is what's possible right now. ${p.url}\n\n` +
+      `Want in? Bounty Radar drops open opportunities daily. ` +
+      `Follow ${this.handle} + turn on notifs.`,
+    );
+
+    await this.tg.sendThread(tweets, 'WINNER SPOTLIGHT');
     await this.prisma.payout.update({
       where: { id: p.id },
       data: { spotlighted: true },

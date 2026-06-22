@@ -55,10 +55,10 @@ export class TelegramService {
 
   /** Send a thread as numbered, separate plain-text messages for copy-paste. */
   async sendThread(tweets: string[], header: string): Promise<void> {
-    await this.sendRaw(`📝 ${header} — ${tweets.length} tweets, copy in order:`);
+    await this.sendRaw(`📝 ${header} — copy ${tweets.length} tweets in order 👇`);
     for (let i = 0; i < tweets.length; i++) {
-      await this.sendRaw(`🐦 TWEET ${i + 1}/${tweets.length}\n\n${tweets[i]}`);
-      await new Promise((r) => setTimeout(r, 400)); // keep order, avoid flood
+      await this.sendRaw(`— ${i + 1}/${tweets.length} —\n\n${tweets[i]}`);
+      await new Promise((r) => setTimeout(r, 400));
     }
   }
 

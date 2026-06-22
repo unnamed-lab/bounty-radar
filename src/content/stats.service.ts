@@ -33,13 +33,22 @@ export class StatsService {
     }
     const top = [...bySource.entries()].sort((a, b) => b[1] - a[1])[0];
 
-    const draft =
-      `📊 Web3 bounties last month, tracked by Bounty Radar:\n\n` +
+    const tweets: string[] = [];
+
+    // Hook
+    tweets.push(
+      `📊 Solana & web3 paid out ~$${Math.round(total).toLocaleString()} in bounties last month\n\n` +
+      `Here's the breakdown of who's paying builders the most 👇`,
+    );
+
+    // Body
+    tweets.push(
       `💸 ~$${Math.round(total).toLocaleString()} paid out\n` +
       `📦 ${payouts.length} bounties closed\n` +
       (top ? `🏆 Most active: ${top[0]} (${top[1]})\n` : '') +
-      `\nI track these daily so you don't have to. Follow ${this.handle}.`;
+      `\nI track these daily so you don't have to. Follow ${this.handle}.`,
+    );
 
-    await this.tg.sendRaw(`📝 MONTHLY-STATS DRAFT\n\n${draft}`);
+    await this.tg.sendThread(tweets, 'MONTHLY STATS');
   }
 }
