@@ -1,0 +1,41 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Bounty {
+  uid                String    @id
+  source             String
+  title              String
+  url                String
+  rewardText         String    @default("")
+  rewardUsd          Float?
+  deadline           DateTime?
+  tags               String    @default("") // comma-joined; sqlite has no arrays
+  status             String    @default("open") // "open" | "closed"
+  firstSeen          DateTime  @default(now())
+  alertedClosingSoon Boolean   @default(false)
+  includedInDrop     Boolean   @default(false)
+
+  @@index([status, deadline])
+  @@index([firstSeen])
+}
+
+model Payout {
+  id          String   @id @default(cuid())
+  source      String
+  title       String
+  url         String
+  winner      String   @default("")
+  amountText  String   @default("")
+  amountUsd   Float?
+  closedAt    DateTime @default(now())
+  spotlighted Boolean  @default(false)
+
+  @@unique([url, winner])
+  @@index([closedAt])
+}
