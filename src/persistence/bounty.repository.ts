@@ -42,18 +42,35 @@ export class BountyRepository {
     });
   }
 
-  /** Best open bounties for the next drop (richest first), excluding expired. */
-  forDrop(limit = 8) {
+  /** Best open bounties for the next drop (richest first), excluding expired and stale. */
+  async forDrop(limit = 8) {
     const now = new Date();
-    return this.prisma.bounty.findMany({
+    const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
+    const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);
+    const PER_SOURCE = 3;
+
+    const candidates = await this.prisma.bounty.findMany({
       where: {
         status: 'open',
         includedInDrop: false,
-        OR: [{ deadline: null }, { deadline: { gte: now } }],
+        deadline: { gte: now },
+        firstSeen: { gte: minFirstSeen },
       },
       orderBy: [{ rewardUsd: 'desc' }, { deadline: 'asc' }],
-      take: limit,
+      take: limit * 6,
     });
+
+    const counts = new Map<string, number>();
+    const result: typeof candidates = [];
+    for (const b of candidates) {
+      const n = counts.get(b.source) ?? 0;
+      if (n < PER_SOURCE) {
+        result.push(b);
+        counts.set(b.source, n + 1);
+      }
+      if (result.length >= limit) break;
+    }
+    return result;
   }
 
   markAlerted(uids: string[]) {

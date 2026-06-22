@@ -9,7 +9,6 @@ import { DevpostSource } from './devpost.source';
 import { CryptoJobsListSource } from './cryptojobslist.source';
 import { SherlockSource } from './sherlock.source';
 import { Code4renaSource } from './code4rena.source';
-import { ImmunefiSource } from './immunefi.source';
 import { SuperteamPayoutSource } from './superteam-payout.source';
 
 @Module({
@@ -21,7 +20,6 @@ import { SuperteamPayoutSource } from './superteam-payout.source';
     CryptoJobsListSource,
     SherlockSource,
     Code4renaSource,
-    ImmunefiSource,
     SuperteamPayoutSource,
     {
       provide: BOUNTY_SOURCES,
@@ -33,7 +31,6 @@ import { SuperteamPayoutSource } from './superteam-payout.source';
         CryptoJobsListSource,
         SherlockSource,
         Code4renaSource,
-        ImmunefiSource,
       ],
     },
     {
