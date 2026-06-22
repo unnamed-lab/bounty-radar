@@ -47,12 +47,11 @@ export class BountyRepository {
     });
   }
 
-  /** Best open bounties for the next drop (richest first), excluding expired and stale. */
+  /** Randomised drop from eligible bounties, capped per source. */
   async forDrop(limit = 8) {
     const now = new Date();
     const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
     const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);
-    const PER_SOURCE = 3;
 
     const candidates = await this.prisma.bounty.findMany({
       where: {
@@ -62,13 +61,20 @@ export class BountyRepository {
         firstSeen: { gte: minFirstSeen },
         rewardUsd: {
           gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '20000'),
-          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '150000'),
+          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
         },
       },
       orderBy: [{ rewardUsd: 'desc' }, { deadline: 'asc' }],
       take: limit * 6,
     });
 
+    // Fisher-Yates shuffle so every drop is a different mix
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    const PER_SOURCE = 3;
     const counts = new Map<string, number>();
     const result: typeof candidates = [];
     for (const b of candidates) {

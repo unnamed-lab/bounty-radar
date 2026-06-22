@@ -44,7 +44,7 @@ export class SuperteamPayoutSource implements PayoutSource {
             source: this.name,
             title: it.title ?? 'Untitled Completed Listing',
             url: it.slug
-              ? `https://superteam.fun/listings/${type}/${it.slug}`
+              ? `https://superteam.fun/earn/listing/${it.slug}/`
               : `https://superteam.fun/earn`,
             winner: 'A builder', // Fallback as individual winner usernames are fetched on detail page
             amountText,
