@@ -38,9 +38,6 @@ importers:
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1
-      playwright:
-        specifier: ^1.49.0
-        version: 1.61.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -57,6 +54,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.0
+      playwright:
+        specifier: ^1.49.0
+        version: 1.61.0
       prisma:
         specifier: ^6.0.0
         version: 6.19.3(typescript@5.9.3)

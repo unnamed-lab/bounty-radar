@@ -1,20 +1,25 @@
-FROM node:20-slim AS build
+FROM node:22-alpine AS build
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY prisma ./prisma
+RUN pnpm exec prisma generate
+
 COPY . .
-RUN npx prisma generate && npm run build
+RUN pnpm run build
 
-FROM node:20-slim
+
+FROM node:22-alpine
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
-
-# Install OpenSSL (required by Prisma)
-RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY prisma ./prisma
+RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/prisma ./prisma
 
 CMD ["node", "dist/main.js"]
