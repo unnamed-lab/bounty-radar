@@ -4,24 +4,26 @@ import { ScraperModule } from '../scraper/scraper.module';
 import { BOUNTY_SOURCES } from './bounty-source.interface';
 import { PAYOUT_SOURCES } from './payout-source.interface';
 import { SuperteamSource } from './superteam.source';
-import { GenericScrapeSource } from './generic-scrape.source';
+import { BountycasterSource } from './bountycaster.source';
+import { DevpostSource } from './devpost.source';
 import { GenericPayoutSource } from './generic-payout.source';
 
 @Module({
   imports: [HttpModule, ScraperModule],
   providers: [
     SuperteamSource,
-    GenericScrapeSource,
+    BountycasterSource,
+    DevpostSource,
     GenericPayoutSource,
     {
       provide: BOUNTY_SOURCES,
       useFactory: (...sources) => sources,
-      inject: [SuperteamSource, GenericScrapeSource], // <- add new bounty sources here
+      inject: [SuperteamSource, BountycasterSource, DevpostSource], // <- bounty sources injected here
     },
     {
       provide: PAYOUT_SOURCES,
       useFactory: (...sources) => sources,
-      inject: [GenericPayoutSource], // <- add new payout sources here
+      inject: [GenericPayoutSource], // <- payout sources injected here
     },
   ],
   exports: [BOUNTY_SOURCES, PAYOUT_SOURCES],
