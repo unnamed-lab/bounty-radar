@@ -19,7 +19,8 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma
 RUN pnpm install --frozen-lockfile --prod
+RUN pnpm exec prisma generate
 
 COPY --from=build /app/dist ./dist
 
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "pnpm exec prisma db push && node dist/main.js"]
