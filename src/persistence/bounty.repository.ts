@@ -48,7 +48,7 @@ export class BountyRepository {
   }
 
   /** Randomised drop from eligible bounties, capped per source. */
-  async forDrop(limit = 8) {
+  async forDrop(limit = 12) {
     const now = new Date();
     const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
     const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);

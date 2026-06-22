@@ -17,7 +17,7 @@ export class DigestService {
 
   /** Returns the daily Bounty Radar thread as tweets, or [] if nothing fresh. */
   async buildDrop(): Promise<string[]> {
-    const bounties = await this.repo.forDrop(8);
+    const bounties = await this.repo.forDrop(12);
     if (!bounties.length) return [];
 
     const totalUsd = bounties.reduce((s, b) => s + (b.rewardUsd ?? 0), 0);
