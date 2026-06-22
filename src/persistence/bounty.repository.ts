@@ -8,7 +8,7 @@ export class BountyRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Persist a never-seen bounty; returns true if it was new. */
-  async upsertIfNew(b: Bounty): Promise<boolean> {
+  async upsertIfNew(b: Bounty, prices?: Record<string, number>): Promise<boolean> {
     const uid = bountyUid(b);
     const exists = await this.prisma.bounty.findUnique({ where: { uid } });
     if (exists) return false;
@@ -19,9 +19,10 @@ export class BountyRepository {
         title: b.title,
         url: b.url,
         rewardText: b.reward ?? '',
-        rewardUsd: parseRewardUsd(b.reward ?? ''),
+        rewardUsd: parseRewardUsd(b.reward ?? '', prices),
         deadline: b.deadline ? new Date(b.deadline) : null,
         tags: (b.tags ?? []).join(','),
+        host: b.host ?? '',
       },
     });
     return true;
