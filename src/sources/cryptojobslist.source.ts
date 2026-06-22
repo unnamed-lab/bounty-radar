@@ -35,7 +35,9 @@ export class CryptoJobsListSource implements BountySource {
           title: job.jobTitle ?? 'Untitled Job',
           url: job.seoSlug ? `${this.BASE}/jobs/${job.seoSlug}` : this.BASE,
           reward: rewardText,
-          deadline: job.publishedAt ? new Date(job.publishedAt).toISOString() : undefined,
+          deadline: job.publishedAt
+            ? new Date(new Date(job.publishedAt).getTime() + 60 * 86_400_000).toISOString()
+            : undefined,
           tags: [...(Array.isArray(job.tags) ? job.tags : []), 'job'],
           host: job.companyName,
         };
