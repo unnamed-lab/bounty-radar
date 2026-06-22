@@ -9,6 +9,11 @@ export class BountyRepository {
 
   /** Persist a never-seen bounty; returns true if it was new. */
   async upsertIfNew(b: Bounty, prices?: Record<string, number>): Promise<boolean> {
+    if (!b.reward) return false;
+    if (b.deadline) {
+      const age = Date.now() - new Date(b.deadline).getTime();
+      if (age > 90 * 86_400_000) return false; // deadline more than 3 months ago
+    }
     const uid = bountyUid(b);
     const exists = await this.prisma.bounty.findUnique({ where: { uid } });
     if (exists) return false;
