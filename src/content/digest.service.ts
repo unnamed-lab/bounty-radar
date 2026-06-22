@@ -48,7 +48,6 @@ export class DigestService {
       `That's today's radar. ♻️ RT to put these on more builders' screens.\n\n` +
       `New drop every day. Follow ${this.handle} + turn on notifications.`;
 
-    await this.repo.markInDrop(bounties.map((b) => b.uid));
     return [hook, ...body, cta];
   }
 }

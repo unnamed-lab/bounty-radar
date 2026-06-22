@@ -6,12 +6,16 @@ import { ClosingSoonService } from './content/closing-soon.service';
 import { DropScheduler } from './content/drop.scheduler';
 import { SpotlightService } from './content/spotlight.service';
 import { StatsService } from './content/stats.service';
+import { JobDropScheduler } from './content/job-drop.scheduler';
 
 async function main() {
   const app = await NestFactory.createApplicationContext(AppModule);
 
-  console.log('→ Daily drop...');
+  console.log('→ Daily bounty drop...');
   await app.get(DropScheduler).dailyDrop();
+
+  console.log('→ Job drop...');
+  await app.get(JobDropScheduler).jobDrop();
 
   console.log('→ Closing soon...');
   await app.get(ClosingSoonService).run();

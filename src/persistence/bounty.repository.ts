@@ -56,11 +56,11 @@ export class BountyRepository {
     const candidates = await this.prisma.bounty.findMany({
       where: {
         status: 'open',
-        includedInDrop: false,
         deadline: { gte: now },
         firstSeen: { gte: minFirstSeen },
+        tags: { not: { contains: 'job' } },
         rewardUsd: {
-          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '20000'),
+          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
           lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
         },
       },
@@ -74,7 +74,47 @@ export class BountyRepository {
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
 
-    const PER_SOURCE = 3;
+    const PER_SOURCE = 2;
+    const counts = new Map<string, number>();
+    const result: typeof candidates = [];
+    for (const b of candidates) {
+      const n = counts.get(b.source) ?? 0;
+      if (n < PER_SOURCE) {
+        result.push(b);
+        counts.set(b.source, n + 1);
+      }
+      if (result.length >= limit) break;
+    }
+    return result;
+  }
+
+  /** Randomised job drop, capped per source. */
+  async forDropJobs(limit = 8) {
+    const now = new Date();
+    const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
+    const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);
+
+    const candidates = await this.prisma.bounty.findMany({
+      where: {
+        status: 'open',
+        tags: { contains: 'job' },
+        deadline: { gte: now },
+        firstSeen: { gte: minFirstSeen },
+        rewardUsd: {
+          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
+          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
+        },
+      },
+      orderBy: [{ rewardUsd: 'desc' }, { deadline: 'asc' }],
+      take: limit * 6,
+    });
+
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    const PER_SOURCE = 2;
     const counts = new Map<string, number>();
     const result: typeof candidates = [];
     for (const b of candidates) {
@@ -92,13 +132,6 @@ export class BountyRepository {
     return this.prisma.bounty.updateMany({
       where: { uid: { in: uids } },
       data: { alertedClosingSoon: true },
-    });
-  }
-
-  markInDrop(uids: string[]) {
-    return this.prisma.bounty.updateMany({
-      where: { uid: { in: uids } },
-      data: { includedInDrop: true },
     });
   }
 }
