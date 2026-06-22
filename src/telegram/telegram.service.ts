@@ -57,7 +57,7 @@ export class TelegramService {
   async sendThread(tweets: string[], header: string): Promise<void> {
     await this.sendRaw(`📝 ${header} — ${tweets.length} tweets, copy in order:`);
     for (let i = 0; i < tweets.length; i++) {
-      await this.sendRaw(`[${i + 1}/${tweets.length}]\n\n${tweets[i]}`);
+      await this.sendRaw(`🐦 TWEET ${i + 1}/${tweets.length}\n\n${tweets[i]}`);
       await new Promise((r) => setTimeout(r, 400)); // keep order, avoid flood
     }
   }

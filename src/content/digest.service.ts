@@ -32,15 +32,18 @@ export class DigestService {
       `\n\nFollow ${this.handle} + 🔔 so you never miss a drop.`;
 
     const body = bounties.map((b, i) => {
-      const host = (b as any).host ? `\n🏢 Host: ${(b as any).host}` : '';
-      const reward = b.rewardText ? `\n💰 ${b.rewardText}` : '';
-      const due = b.deadline
-        ? `\n⏳ ${b.deadline.toISOString().slice(0, 10)}`
-        : '';
+      const parts: string[] = [];
+      if ((b as any).host) parts.push(`🏢 Host: ${(b as any).host}`);
+      if (b.rewardText) parts.push(`💰 Reward: ${b.rewardText}`);
+      if (b.deadline) {
+        parts.push(`⏳ Deadline: ${b.deadline.toISOString().slice(0, 10)}`);
+      }
       const tagList = b.tags ? b.tags.split(',').filter(Boolean).join(', ') : '';
-      const tags = tagList ? `\n🏷️ ${tagList}` : '';
+      if (tagList) parts.push(`🏷️ Tags: ${tagList}`);
+
+      const details = parts.length ? `\n\n${parts.join('\n')}` : '';
       
-      let line = `${i + 1}. ${b.title}${host}${reward}${due}${tags}\n🔗 ${b.url}`;
+      let line = `${i + 1}. ${b.title}${details}\n\n🔗 ${b.url}`;
       if (line.length > TWEET_MAX) line = line.slice(0, TWEET_MAX - 1) + '…';
       return line;
     });
