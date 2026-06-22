@@ -1,13 +1,20 @@
-# Playwright base image ships Chromium + system deps preinstalled.
-# Match the tag to the playwright version in package.json.
-FROM mcr.microsoft.com/playwright:v1.49.0-jammy
+FROM node:20-slim AS build
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
-
+RUN npm install
 COPY . .
 RUN npx prisma generate && npm run build
 
-# Persist the SQLite file by mounting a volume at /app (or use Postgres).
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install OpenSSL (required by Prisma)
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/prisma ./prisma
+
 CMD ["node", "dist/main.js"]
