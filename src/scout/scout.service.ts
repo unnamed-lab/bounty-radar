@@ -12,6 +12,7 @@ import {
 import { BountyRepository } from '../persistence/bounty.repository';
 import { PrismaService } from '../persistence/prisma.service';
 import { parseRewardUsd } from '../domain/reward';
+import { TelegramService } from '../telegram/telegram.service';
 
 @Injectable()
 export class ScoutService {
@@ -23,6 +24,7 @@ export class ScoutService {
     @Inject(PAYOUT_SOURCES) private readonly payoutSources: PayoutSource[],
     private readonly repo: BountyRepository,
     private readonly prisma: PrismaService,
+    private readonly tg: TelegramService,
   ) {}
 
   // Scan keeps the DB fresh; the curated drop posts from it. Guards re-entrancy.
@@ -35,8 +37,9 @@ export class ScoutService {
     this.running = true;
     try {
       const prices = await this.fetchPrices();
-      await this.scanBounties(prices);
-      await this.scanPayouts(prices);
+      const bountyResult = await this.scanBounties(prices);
+      const payoutResult = await this.scanPayouts(prices);
+      await this.sendSummary(bountyResult, payoutResult);
     } finally {
       this.running = false;
     }
@@ -67,12 +70,14 @@ export class ScoutService {
     }
   }
 
-  private async scanBounties(prices: Record<string, number>): Promise<void> {
+  private async scanBounties(prices: Record<string, number>): Promise<{ newCount: number; errors: string[] }> {
     const results = await Promise.allSettled(this.sources.map((s) => s.fetch()));
     let newCount = 0;
+    const errors: string[] = [];
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.status === 'rejected') {
+        errors.push(this.sources[i].name);
         this.logger.error(`[${this.sources[i].name}] fetch failed`, r.reason);
         continue;
       }
@@ -86,16 +91,19 @@ export class ScoutService {
       }
     }
     this.logger.log(`bounty scan — ${newCount} new persisted`);
+    return { newCount, errors };
   }
 
-  private async scanPayouts(prices: Record<string, number>): Promise<void> {
+  private async scanPayouts(prices: Record<string, number>): Promise<{ newCount: number; errors: string[] }> {
     const results = await Promise.allSettled(
       this.payoutSources.map((s) => s.fetchPayouts()),
     );
     let newCount = 0;
+    const errors: string[] = [];
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.status === 'rejected') {
+        errors.push(this.payoutSources[i].name);
         this.logger.error(
           `[${this.payoutSources[i].name}] payouts failed`,
           r.reason,
@@ -123,5 +131,23 @@ export class ScoutService {
       }
     }
     this.logger.log(`payout scan — ${newCount} new persisted`);
+    return { newCount, errors };
+  }
+
+  private async sendSummary(
+    bountyResult: { newCount: number; errors: string[] },
+    payoutResult: { newCount: number; errors: string[] },
+  ): Promise<void> {
+    const total = await this.prisma.bounty.count();
+    const lines: string[] = [
+      `📡 Scan complete\n`,
+      `New: ${bountyResult.newCount} bounties · ${payoutResult.newCount} payouts`,
+      `Total tracked: ${total} bounties`,
+    ];
+    const allErrors = [...new Set([...bountyResult.errors, ...payoutResult.errors])];
+    for (const name of allErrors) {
+      lines.push(`⚠️ ${name} — fetch failed`);
+    }
+    await this.tg.sendRaw(lines.join('\n'));
   }
 }
