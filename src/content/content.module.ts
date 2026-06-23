@@ -6,6 +6,7 @@ import { SpotlightService } from './spotlight.service';
 import { StatsService } from './stats.service';
 import { DropScheduler } from './drop.scheduler';
 import { JobDropScheduler } from './job-drop.scheduler';
+import { FeaturedDropService } from './featured-drop.service';
 
 @Module({
   imports: [TelegramModule],
@@ -16,6 +17,7 @@ import { JobDropScheduler } from './job-drop.scheduler';
     StatsService,
     DropScheduler,
     JobDropScheduler,
+    FeaturedDropService,
   ],
 })
 export class ContentModule {}

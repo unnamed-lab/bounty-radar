@@ -7,6 +7,7 @@ import { DropScheduler } from './content/drop.scheduler';
 import { SpotlightService } from './content/spotlight.service';
 import { StatsService } from './content/stats.service';
 import { JobDropScheduler } from './content/job-drop.scheduler';
+import { FeaturedDropService } from './content/featured-drop.service';
 
 async function main() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -25,6 +26,9 @@ async function main() {
 
   console.log('→ Monthly stats...');
   await app.get(StatsService).run();
+
+  console.log('→ Featured drop...');
+  await app.get(FeaturedDropService).run();
 
   console.log('✓ all content sent');
   await app.close();

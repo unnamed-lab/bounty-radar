@@ -128,6 +128,82 @@ export class BountyRepository {
     return result;
   }
 
+  /** Pick one un-featured bounty (top 3 by reward, random). Marks it as featured. */
+  async forFeaturedDrop(): Promise<{
+    bounty: {
+      uid: string;
+      title: string;
+      host: string;
+      rewardText: string;
+      rewardUsd: number | null;
+      deadline: Date | null;
+      tags: string;
+      source: string;
+      url: string;
+    };
+    poolResets: boolean;
+  } | null> {
+    const now = new Date();
+    const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
+    const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);
+
+    const candidates = await this.prisma.bounty.findMany({
+      where: {
+        status: 'open',
+        includedInDrop: false,
+        deadline: { gte: now },
+        firstSeen: { gte: minFirstSeen },
+        tags: { not: { contains: 'job' } },
+        rewardUsd: {
+          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
+          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
+        },
+      },
+      orderBy: [{ rewardUsd: 'desc' }, { firstSeen: 'desc' }],
+      take: 3,
+    });
+
+    if (!candidates.length) return null;
+
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+
+    await this.prisma.bounty.update({
+      where: { uid: chosen.uid },
+      data: { includedInDrop: true },
+    });
+
+    // Reset pool if too few un-featured bounties remain
+    const remaining = await this.prisma.bounty.count({
+      where: {
+        status: 'open',
+        includedInDrop: false,
+        deadline: { gte: now },
+        firstSeen: { gte: minFirstSeen },
+        tags: { not: { contains: 'job' } },
+        rewardUsd: {
+          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
+          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
+        },
+      },
+    });
+
+    let poolResets = false;
+    if (remaining < 5) {
+      await this.prisma.bounty.updateMany({
+        where: { includedInDrop: true },
+        data: { includedInDrop: false },
+      });
+      poolResets = true;
+      // Re-mark the one we just picked so it stays featured
+      await this.prisma.bounty.update({
+        where: { uid: chosen.uid },
+        data: { includedInDrop: true },
+      });
+    }
+
+    return { bounty: chosen, poolResets };
+  }
+
   markAlerted(uids: string[]) {
     return this.prisma.bounty.updateMany({
       where: { uid: { in: uids } },
