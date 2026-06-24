@@ -23,4 +23,4 @@ RUN pnpm exec prisma generate
 
 COPY --from=build /app/dist ./dist
 
-CMD ["sh", "-c", "pnpm exec prisma db push && node dist/main.js"]
+CMD ["sh", "-c", "for i in $(seq 1 5); do pnpm exec prisma db push && break; echo \"db push attempt $i failed, retrying in $((i * 2))s\"; sleep $((i * 2)); done && node dist/main.js"]
