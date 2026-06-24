@@ -8,6 +8,9 @@ import { SpotlightService } from './content/spotlight.service';
 import { StatsService } from './content/stats.service';
 import { JobDropScheduler } from './content/job-drop.scheduler';
 import { HourlyFeedService } from './content/hourly-feed.service';
+import { WeeklyRecapService } from './content/weekly-recap.service';
+import { EngagementService } from './content/engagement.service';
+import { TipsService } from './content/tips.service';
 
 async function main() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -29,6 +32,15 @@ async function main() {
 
   console.log('→ Hourly feed...');
   await app.get(HourlyFeedService).run();
+
+  console.log('→ Weekly recap...');
+  await app.get(WeeklyRecapService).run();
+
+  console.log('→ Engagement post...');
+  await app.get(EngagementService).run();
+
+  console.log('→ Tips thread...');
+  await app.get(TipsService).run();
 
   console.log('✓ all content sent');
   await app.close();

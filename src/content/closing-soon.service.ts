@@ -63,6 +63,9 @@ export class ClosingSoonService {
     );
 
     await this.tg.sendThread(tweets, 'CLOSING SOON');
+    for (const b of soon) {
+      await this.repo.logBountyPost(b.uid, 'closing-soon-alert').catch(() => {});
+    }
     await this.repo.markAlerted(soon.map((b) => b.uid));
     this.logger.log(`alerted ${soon.length} closing-soon bounties`);
   }

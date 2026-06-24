@@ -82,6 +82,7 @@ export class HourlyFeedService {
     const ai = await this.writer.featuredBounty(bounty, pageContent);
     const tweet = ai ?? this.defaultTopPickTweet(bounty);
 
+    await this.repo.logBountyPost(bounty.uid, 'hourly-top-pick');
     return { header: 'TOP PICK DRAFT', tweet, poolResets, title: bounty.title };
   }
 
@@ -96,6 +97,7 @@ export class HourlyFeedService {
     const ai = await this.writer.closingSoon(bounty);
     const tweet = ai ?? this.defaultClosingSoonTweet(bounty);
 
+    await this.repo.logBountyPost(bounty.uid, 'hourly-closing-soon');
     return { header: 'CLOSING SOON DRAFT', tweet, poolResets, title: bounty.title };
   }
 
@@ -110,6 +112,7 @@ export class HourlyFeedService {
     const ai = await this.writer.freshFind(bounty);
     const tweet = ai ?? this.defaultFreshFindTweet(bounty);
 
+    await this.repo.logBountyPost(bounty.uid, 'hourly-fresh-find');
     return { header: 'FRESH FIND DRAFT', tweet, poolResets, title: bounty.title };
   }
 

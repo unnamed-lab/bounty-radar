@@ -251,6 +251,87 @@ Separate the two tweets with "---" on its own line.`;
     return parts.length >= 2 ? parts.slice(0, 2) : [result];
   }
 
+  async weeklyRecap(data: {
+    totalCount: number;
+    totalUsd: number;
+    topBounties: Array<{ title: string; host: string; rewardText: string; rewardUsd: number | null; url: string }>;
+    topSources: Array<{ source: string; count: number }>;
+    categoryBreakdown: Array<{ category: string; count: number }>;
+  }): Promise<string[] | null> {
+    const top = data.topBounties
+      .map((b, i) => `${i + 1}. ${b.title} — ${b.host} — ${b.rewardText || (b.rewardUsd ? `$${b.rewardUsd.toLocaleString()}` : 'N/A')}`)
+      .join('\n');
+    const sources = data.topSources
+      .map((s) => `${s.source} (${s.count})`)
+      .join(', ');
+    const cats = data.categoryBreakdown
+      .map((c) => `${c.category} (${c.count})`)
+      .join(', ');
+
+    const prompt = `Write a 3-tweet thread summarising the past week in web3 bounties.
+
+UK English. No em dashes.
+
+Stats:
+- ${data.totalCount} new bounties added
+- Total value: $${Math.round(data.totalUsd).toLocaleString()}
+- Top 3: ${top}
+- Top sources: ${sources}
+- Category breakdown: ${cats}
+
+Structure:
+Tweet 1: Hook — big picture on the week. Total value and count.
+Tweet 2: Breakdown — top sources and most common categories.
+Tweet 3: Call to action — follow ${this.handle} for daily bounty radar updates.
+
+No hashtags. Separate each tweet with "---" on its own line. Output only the thread.`;
+
+    const result = await this.zen.generate(prompt, { maxTokens: 8000 });
+    if (!result) return null;
+
+    const parts = result.split(/---/).map((s) => s.trim()).filter(Boolean);
+    return parts.length >= 2 ? parts : null;
+  }
+
+  async engagementPost(topic: string, bounty?: { title: string; host: string; url: string }): Promise<string | null> {
+    const ctx = bounty
+      ? `\nReference bounty for context:\nTitle: ${bounty.title}\nHost: ${bounty.host}\nURL: ${bounty.url}`
+      : '';
+
+    const prompt = `Write a single engaging X post (not a thread) for a web3 bounty radar account.
+
+UK English. No em dashes. No hashtags.
+
+Topic: ${topic}${ctx}
+
+Make it conversation-starting. Ask a question or invite people to share their thoughts. End with a CTA to like, RT, follow ${this.handle}, and reply.
+
+Output only the post.`;
+
+    return this.zen.generate(prompt, { maxTokens: 6000 });
+  }
+
+  async tipThread(topic: string): Promise<string[] | null> {
+    const prompt = `Write a 4-tweet educational thread for a web3 bounty radar account.
+
+UK English. No em dashes. No hashtags.
+
+Topic: ${topic}
+
+Make it practical and actionable. Each tweet should build on the previous one.
+Tweet 1: Hook — why this matters
+Tweet 2-3: The actual tips or steps
+Tweet 4: Summary + CTA to follow ${this.handle} for more
+
+Separate each tweet with "---" on its own line. Output only the thread.`;
+
+    const result = await this.zen.generate(prompt, { maxTokens: 8000 });
+    if (!result) return null;
+
+    const parts = result.split(/---/).map((s) => s.trim()).filter(Boolean);
+    return parts.length >= 3 ? parts : null;
+  }
+
   async stats(
     total: number,
     count: number,

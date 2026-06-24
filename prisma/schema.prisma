@@ -26,6 +26,17 @@ model Bounty {
   @@index([firstSeen])
 }
 
+model BountyPost {
+  id        Int      @id @default(autoincrement())
+  bountyUid String
+  feed      String   // e.g. "hourly-top-pick", "daily-drop", "closing-soon", "engagement"
+  postedAt  DateTime @default(now())
+
+  @@index([bountyUid])
+  @@index([postedAt])
+  @@index([bountyUid, postedAt])
+}
+
 model Payout {
   id          String   @id @default(cuid())
   source      String

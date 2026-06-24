@@ -270,10 +270,111 @@ export class BountyRepository {
     return { bounty: chosen, poolResets };
   }
 
+  /** Log that a bounty was posted to a feed. */
+  async logBountyPost(bountyUid: string, feed: string): Promise<void> {
+    await this.prisma.bountyPost.create({
+      data: { bountyUid, feed },
+    });
+  }
+
+  /** Count how many times a bounty was posted across all feeds since an optional date. */
+  async getBountyPostCount(bountyUid: string, since?: Date): Promise<number> {
+    return this.prisma.bountyPost.count({
+      where: {
+        bountyUid,
+        ...(since ? { postedAt: { gte: since } } : {}),
+      },
+    });
+  }
+
+  /** Get most-posted bounties across all feeds, ordered by post count. */
+  async getPostStats(limit = 20, since?: Date): Promise<Array<{ bountyUid: string; count: number; lastPosted: Date }>> {
+    const where = since ? { postedAt: { gte: since } } : {};
+    const rows = await this.prisma.bountyPost.groupBy({
+      by: ['bountyUid'],
+      where,
+      _count: { bountyUid: true },
+      _max: { postedAt: true },
+      orderBy: { _count: { bountyUid: 'desc' } },
+      take: limit,
+    });
+
+    return rows.map((r) => ({
+      bountyUid: r.bountyUid,
+      count: r._count.bountyUid,
+      lastPosted: r._max.postedAt!,
+    }));
+  }
+
+  /** Get posts for a given feed in the last N hours. */
+  async getRecentPosts(feed: string, hours = 24): Promise<Array<{ bountyUid: string; postedAt: Date }>> {
+    const since = new Date(Date.now() - hours * 3_600_000);
+    return this.prisma.bountyPost.findMany({
+      where: { feed, postedAt: { gte: since } },
+      orderBy: { postedAt: 'desc' },
+    });
+  }
+
   markAlerted(uids: string[]) {
     return this.prisma.bounty.updateMany({
       where: { uid: { in: uids } },
       data: { alertedClosingSoon: true },
     });
+  }
+
+  /** Summary of bounties first seen in the last N days, for weekly recap. */
+  async weeklyRecap(days = 7) {
+    const since = new Date(Date.now() - days * 86_400_000);
+    const now = new Date();
+
+    const bounties = await this.prisma.bounty.findMany({
+      where: {
+        firstSeen: { gte: since },
+        status: 'open',
+        deadline: { gte: now },
+        tags: { not: { contains: 'job' } },
+      },
+      orderBy: { rewardUsd: 'desc' },
+    });
+
+    const totalCount = bounties.length;
+    const totalUsd = bounties.reduce((s, b) => s + (b.rewardUsd ?? 0), 0);
+
+    const topBounties = bounties
+      .filter((b) => b.rewardUsd != null)
+      .slice(0, 3)
+      .map((b) => ({
+        title: b.title,
+        host: b.host,
+        rewardText: b.rewardText,
+        rewardUsd: b.rewardUsd,
+        url: b.url,
+      }));
+
+    const sourceCount = new Map<string, number>();
+    for (const b of bounties) {
+      sourceCount.set(b.source, (sourceCount.get(b.source) ?? 0) + 1);
+    }
+    const topSources = [...sourceCount.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([source, count]) => ({ source, count }));
+
+    const catCount = new Map<string, number>();
+    for (const b of bounties) {
+      const cats = b.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      for (const c of cats) {
+        catCount.set(c, (catCount.get(c) ?? 0) + 1);
+      }
+    }
+    const categoryBreakdown = [...catCount.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([category, count]) => ({ category, count }));
+
+    return { totalCount, totalUsd, topBounties, topSources, categoryBreakdown };
   }
 }
