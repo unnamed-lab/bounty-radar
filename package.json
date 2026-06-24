@@ -13,6 +13,7 @@
     "start:dev": "nest start --watch",
     "scan:once": "node dist/run-once.js",
     "content:once": "node dist/content-once.js",
+    "test:hourly": "node dist/test-hourly.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

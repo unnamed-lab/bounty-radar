@@ -128,24 +128,17 @@ export class BountyRepository {
     return result;
   }
 
-  /** Pick one un-featured bounty (top 3 by reward, random). Marks it as featured. */
-  async forFeaturedDrop(): Promise<{
+  /** Pick one high-value un-featured bounty (firstSeen < 30d, top 3, random). */
+  async forTopPick(): Promise<{
     bounty: {
-      uid: string;
-      title: string;
-      host: string;
-      rewardText: string;
-      rewardUsd: number | null;
-      deadline: Date | null;
-      tags: string;
-      source: string;
-      url: string;
+      uid: string; title: string; host: string; rewardText: string;
+      rewardUsd: number | null; deadline: Date | null; tags: string;
+      source: string; url: string;
     };
     poolResets: boolean;
   } | null> {
     const now = new Date();
-    const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
-    const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);
+    const minFirstSeen = new Date(now.getTime() - 30 * 86_400_000);
 
     const candidates = await this.prisma.bounty.findMany({
       where: {
@@ -156,13 +149,89 @@ export class BountyRepository {
         tags: { not: { contains: 'job' } },
         rewardUsd: {
           gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
-          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
         },
       },
       orderBy: [{ rewardUsd: 'desc' }, { firstSeen: 'desc' }],
       take: 3,
     });
 
+    return this.pickAndMark(candidates);
+  }
+
+  /** Pick one un-featured bounty closing within 72h (firstSeen < 60d). */
+  async forClosingSoonFeed(): Promise<{
+    bounty: {
+      uid: string; title: string; host: string; rewardText: string;
+      rewardUsd: number | null; deadline: Date | null; tags: string;
+      source: string; url: string;
+    };
+    poolResets: boolean;
+  } | null> {
+    const now = new Date();
+    const minFirstSeen = new Date(now.getTime() - 60 * 86_400_000);
+    const until = new Date(now.getTime() + 72 * 3_600_000);
+
+    const candidates = await this.prisma.bounty.findMany({
+      where: {
+        status: 'open',
+        includedInDrop: false,
+        deadline: { gte: now, lte: until },
+        firstSeen: { gte: minFirstSeen },
+        tags: { not: { contains: 'job' } },
+      },
+      orderBy: { deadline: 'asc' },
+      take: 3,
+    });
+
+    return this.pickAndMark(candidates);
+  }
+
+  /** Pick one un-featured bounty listed within 48h. */
+  async forFreshFind(): Promise<{
+    bounty: {
+      uid: string; title: string; host: string; rewardText: string;
+      rewardUsd: number | null; deadline: Date | null; tags: string;
+      source: string; url: string;
+    };
+    poolResets: boolean;
+  } | null> {
+    const now = new Date();
+    const minFirstSeen = new Date(now.getTime() - 48 * 3_600_000);
+
+    const candidates = await this.prisma.bounty.findMany({
+      where: {
+        status: 'open',
+        includedInDrop: false,
+        deadline: { gte: now },
+        firstSeen: { gte: minFirstSeen },
+        tags: { not: { contains: 'job' } },
+        rewardUsd: {
+          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
+        },
+      },
+      orderBy: [{ rewardUsd: 'desc' }, { firstSeen: 'desc' }],
+      take: 3,
+    });
+
+    return this.pickAndMark(candidates);
+  }
+
+  /** Mark a random candidate as featured. Reset pool if < 5 eligible remain. */
+  private async pickAndMark(
+    candidates: Array<{
+      uid: string; title: string; host: string; rewardText: string;
+      rewardUsd: number | null; deadline: Date | null; tags: string;
+      source: string; url: string; firstSeen: Date; status: string;
+      alertedClosingSoon: boolean; includedInDrop: boolean;
+    }>,
+  ): Promise<{
+    bounty: {
+      uid: string; title: string; host: string; rewardText: string;
+      rewardUsd: number | null; deadline: Date | null; tags: string;
+      source: string; url: string;
+    };
+    poolResets: boolean;
+  } | null> {
     if (!candidates.length) return null;
 
     const chosen = candidates[Math.floor(Math.random() * candidates.length)];
@@ -172,19 +241,17 @@ export class BountyRepository {
       data: { includedInDrop: true },
     });
 
-    // Reset pool if too few un-featured bounties remain
+    const now = new Date();
+    const eligibleWhere = {
+      status: 'open',
+      includedInDrop: false,
+      deadline: { gte: now },
+      tags: { not: { contains: 'job' } },
+      rewardUsd: { gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200') },
+    };
+
     const remaining = await this.prisma.bounty.count({
-      where: {
-        status: 'open',
-        includedInDrop: false,
-        deadline: { gte: now },
-        firstSeen: { gte: minFirstSeen },
-        tags: { not: { contains: 'job' } },
-        rewardUsd: {
-          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
-          lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
-        },
-      },
+      where: eligibleWhere,
     });
 
     let poolResets = false;
@@ -194,7 +261,6 @@ export class BountyRepository {
         data: { includedInDrop: false },
       });
       poolResets = true;
-      // Re-mark the one we just picked so it stays featured
       await this.prisma.bounty.update({
         where: { uid: chosen.uid },
         data: { includedInDrop: true },
