@@ -39,7 +39,7 @@ export class DigestService {
         rewardUsd: b.rewardUsd,
         deadline: b.deadline,
         tags: b.tags,
-        url: b.url,
+        url: normaliseUrl(b.url),
       })),
     );
 

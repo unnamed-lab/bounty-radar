@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { BountyRepository } from '../persistence/bounty.repository';
 import { ContentWriterService } from '../zen/content-writer.service';
 import { TelegramService } from '../telegram/telegram.service';
+import { normaliseUrl } from '../utils/normalise-url';
 
 const TWEET_MAX = 280;
 
@@ -53,7 +54,7 @@ export class JobDropScheduler {
         : '';
       if (tagList) parts.push(`🏷️ ${tagList}`);
       const details = parts.length ? `\n\n${parts.join('\n')}` : '';
-      let line = `${b.title}${details}\n\n🔗 ${b.url}`;
+      let line = `${b.title}${details}\n\n🔗 ${normaliseUrl(b.url)}`;
       if (line.length > TWEET_MAX) line = line.slice(0, TWEET_MAX - 1) + '…';
       tweets.push(line);
     }

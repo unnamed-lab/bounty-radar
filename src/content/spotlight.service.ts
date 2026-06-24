@@ -5,6 +5,7 @@ import { PrismaService } from '../persistence/prisma.service';
 import { BountyFetcherService } from '../zen/bounty-fetcher.service';
 import { ContentWriterService } from '../zen/content-writer.service';
 import { TelegramService } from '../telegram/telegram.service';
+import { normaliseUrl } from '../utils/normalise-url';
 
 @Injectable()
 export class SpotlightService {
@@ -30,6 +31,7 @@ export class SpotlightService {
     if (!p) return;
 
     // Try AI-generated spotlight
+    const displayUrl = normaliseUrl(p.url);
     const pageContent = await this.fetcher.fetch(p.url);
     const ai = await this.writer.spotlight(
       {
@@ -37,7 +39,7 @@ export class SpotlightService {
         winner: p.winner,
         amountText: p.amountText,
         amountUsd: p.amountUsd,
-        url: p.url,
+        url: displayUrl,
         source: p.source,
       },
       pageContent,
@@ -56,7 +58,7 @@ export class SpotlightService {
         `💰 Someone just scored big in web3\n\n` +
         `Proof builders are getting paid in this ecosystem. Here's what happened 👇`,
         `${who}${amt} for: ${p.title}\n\n` +
-        `This is what's possible right now. ${p.url}\n\n` +
+        `This is what's possible right now. ${displayUrl}\n\n` +
         `Want in? Bounty Radar drops open opportunities daily. ` +
         `Follow ${this.handle} + turn on notifs.`,
       ];
