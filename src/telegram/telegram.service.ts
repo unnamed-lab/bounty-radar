@@ -6,14 +6,14 @@ import { Bounty } from '../domain/bounty';
 
 @Injectable()
 export class TelegramService {
-  private readonly api: string;
+  private readonly apiBase: string;
   private readonly chatId: string;
 
   constructor(
     private readonly http: HttpService,
     cfg: ConfigService,
   ) {
-    this.api = `https://api.telegram.org/bot${cfg.get('TG_TOKEN')}/sendMessage`;
+    this.apiBase = `https://api.telegram.org/bot${cfg.get('TG_TOKEN')}`;
     this.chatId = cfg.get<string>('TG_CHAT_ID')!;
   }
 
@@ -24,11 +24,24 @@ export class TelegramService {
       .replace(/>/g, '&gt;');
   }
 
-  /**
-   * Send text. Plain text by default, which is safe for arbitrary draft content
-   * (titles/URLs with & < > won't break the message). Pass { html: true } only
-   * when the caller has already escaped its content.
-   */
+  private async call(
+    method: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await firstValueFrom(
+          this.http.post(`${this.apiBase}/${method}`, payload, { timeout: 20_000 }),
+        );
+        return;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await new Promise((r) => setTimeout(r, attempt * 1500));
+      }
+    }
+  }
+
+  /** Send to the configured channel/chat (plain text, HTML-safe). */
   async sendRaw(
     text: string,
     opts: { html?: boolean; preview?: boolean } = {},
@@ -39,17 +52,28 @@ export class TelegramService {
       disable_web_page_preview: !opts.preview,
     };
     if (opts.html) payload.parse_mode = 'HTML';
+    await this.call('sendMessage', payload);
+  }
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        await firstValueFrom(
-          this.http.post(this.api, payload, { timeout: 20_000 }),
-        );
-        return;
-      } catch (err) {
-        if (attempt === 3) throw err;
-        await new Promise((r) => setTimeout(r, attempt * 1500));
-      }
+  /** Send a reply to an arbitrary chat (used for bot DM responses). */
+  async sendTo(chatId: number | string, text: string): Promise<void> {
+    await this.call('sendMessage', {
+      chat_id: String(chatId),
+      text,
+    });
+  }
+
+  /** Fetch updates for bot command polling. */
+  async getUpdates(offset?: number): Promise<any[]> {
+    const payload: Record<string, unknown> = { timeout: 5 };
+    if (offset != null) payload.offset = offset;
+    try {
+      const { data } = await firstValueFrom(
+        this.http.post(`${this.apiBase}/getUpdates`, payload, { timeout: 10_000 }),
+      );
+      return data.ok ? (data.result ?? []) : [];
+    } catch {
+      return [];
     }
   }
 

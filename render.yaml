@@ -1,11 +1,9 @@
 services:
-  - type: web
+  - type: worker
     name: bounty-radar
     env: docker
     dockerfilePath: ./Dockerfile
     envVars:
-      - key: DASHBOARD_PORT
-        value: '10000'
       - key: DATABASE_URL
         sync: false
       - key: TG_TOKEN
