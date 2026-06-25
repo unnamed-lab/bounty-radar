@@ -12,3 +12,4 @@ services:
         sync: false
       - key: TG_CHAT_ID
         sync: false
+    numInstances: 1

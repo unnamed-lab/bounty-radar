@@ -360,49 +360,50 @@ export class BountyRepository {
   } | null> {
     if (!candidates.length) return null;
 
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(42)`;
 
-    await this.prisma.bounty.update({
-      where: { uid: chosen.uid },
-      data: { includedInDrop: true },
-    });
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
 
-    const now = new Date();
-    const eligibleWhere = {
-      status: 'open',
-      includedInDrop: false,
-      deadline: { gte: now },
-      tags: { not: { contains: 'job' } },
-      rewardUsd: { gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200') },
-    };
-
-    const remaining = await this.prisma.bounty.count({
-      where: eligibleWhere,
-    });
-
-    let poolResets = false;
-    if (remaining < 5) {
-      // Only reset bounties the source has confirmed recently to avoid recycling stale content
-      const poolResetCutoff = new Date(Date.now() - 30 * 86_400_000);
-      await this.prisma.bounty.updateMany({
-        where: {
-          includedInDrop: true,
-          lastSeen: { gte: poolResetCutoff },
-        },
-        data: { includedInDrop: false },
-      });
-      poolResets = true;
-      await this.prisma.bounty.update({
+      await tx.bounty.update({
         where: { uid: chosen.uid },
         data: { includedInDrop: true },
       });
-    }
 
-    return { bounty: chosen, poolResets };
+      const now = new Date();
+      const eligibleWhere = {
+        status: 'open',
+        includedInDrop: false,
+        deadline: { gte: now },
+        tags: { not: { contains: 'job' } },
+        rewardUsd: { gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200') },
+      };
+
+      const remaining = await tx.bounty.count({ where: eligibleWhere });
+
+      let poolResets = false;
+      if (remaining < 5) {
+        const poolResetCutoff = new Date(Date.now() - 30 * 86_400_000);
+        await tx.bounty.updateMany({
+          where: {
+            includedInDrop: true,
+            lastSeen: { gte: poolResetCutoff },
+          },
+          data: { includedInDrop: false },
+        });
+        poolResets = true;
+        await tx.bounty.update({
+          where: { uid: chosen.uid },
+          data: { includedInDrop: true },
+        });
+      }
+
+      return { bounty: chosen, poolResets };
+    });
   }
 
   /** Check if a bounty was posted to a feed within the last N hours. */
-  async wasRecentlyPosted(bountyUid: string, feed: string, hours = 2): Promise<boolean> {
+  async wasRecentlyPosted(bountyUid: string, feed: string, hours = 24): Promise<boolean> {
     const since = new Date(Date.now() - hours * 3_600_000);
     const count = await this.prisma.bountyPost.count({
       where: { bountyUid, feed, postedAt: { gte: since } },
