@@ -5,9 +5,15 @@ import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { TelegramService } from './telegram/telegram.service';
 
+const PORT = parseInt(process.env.DASHBOARD_PORT ?? '3456', 10);
+const HOST = process.env.DASHBOARD_HOST ?? '0.0.0.0';
+
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(AppModule);
+  const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();
+
+  await app.listen(PORT, HOST);
+  new Logger('BountyRadar').log(`Dashboard → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
 
   try {
     const tg = app.get(TelegramService);
@@ -17,8 +23,6 @@ async function bootstrap() {
   } catch {
     // non-critical; don't crash startup
   }
-
-  new Logger('BountyRadar').log('Bounty Radar is live — schedules armed.');
 }
 
 bootstrap();
