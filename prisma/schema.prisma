@@ -19,11 +19,14 @@ model Bounty {
   host               String    @default("")
   status             String    @default("open") // "open" | "closed"
   firstSeen          DateTime  @default(now())
+  lastSeen           DateTime  @default(now())
+  lastPostedAt       DateTime?
   alertedClosingSoon Boolean   @default(false)
   includedInDrop     Boolean   @default(false)
 
   @@index([status, deadline])
   @@index([firstSeen])
+  @@index([lastSeen])
 }
 
 model BountyPost {

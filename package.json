@@ -14,6 +14,8 @@
     "scan:once": "node dist/run-once.js",
     "content:once": "node dist/content-once.js",
     "test:hourly": "node dist/test-hourly.js",
+    "stats": "node dist/stats-command.js",
+    "dashboard": "node dist/dashboard.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

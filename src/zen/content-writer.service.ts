@@ -110,6 +110,44 @@ ${data.url}`;
     return null;
   }
 
+  async activePick(data: {
+    title: string;
+    host: string;
+    rewardText: string;
+    rewardUsd: number | null;
+    deadline: Date | null;
+    tags: string;
+    source: string;
+    url: string;
+  }, pageContent?: string): Promise<string | null> {
+    const reward =
+      data.rewardText ||
+      (data.rewardUsd ? `$${data.rewardUsd.toLocaleString()}` : '');
+
+    const context = pageContent
+      ? `\n\nPage content from the bounty URL:\n${pageContent}`
+      : '';
+
+    const prompt = `Write a long-form X post for a verified active web3 bounty that has been live for a while and still accepting submissions.
+
+UK English. No em dashes.
+
+Title: ${data.title}
+Reward: ${reward}
+Host: ${data.host || data.source}
+Deadline: ${data.deadline ? data.deadline.toISOString().slice(0, 10) : 'N/A'}
+
+Structure: hook highlighting that this bounty is still open and actively accepting submissions | what the opportunity is | a clear DETAILS block showing Reward, Host (tag with @ if you know the handle), Deadline | what needs to be built | link | CTA asking to like, RT, follow ${this.handle}, and reply with thoughts
+
+No hashtags. Emphasise that this is a live, active opportunity that people should still apply for. Output only the post text.
+${data.url}${context}`;
+
+    const result = await this.zen.generate(prompt, { maxTokens: 8000 });
+    if (result) return result;
+
+    return null;
+  }
+
   async freshFind(data: {
     title: string;
     host: string;

@@ -7,7 +7,7 @@ import { parseRewardUsd } from '../domain/reward';
 export class BountyRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Persist a never-seen bounty; returns true if it was new. */
+  /** Persist a never-seen bounty; returns true if it was new. Refreshes lastSeen for existing ones. */
   async upsertIfNew(b: Bounty, prices?: Record<string, number>): Promise<boolean> {
     if (!b.reward) return false;
     if (b.deadline) {
@@ -16,7 +16,17 @@ export class BountyRepository {
     }
     const uid = bountyUid(b);
     const exists = await this.prisma.bounty.findUnique({ where: { uid } });
-    if (exists) return false;
+    if (exists) {
+      // Source still returns this bounty — refresh lastSeen and mutable fields
+      const updateData: Record<string, unknown> = { lastSeen: new Date() };
+      if (b.deadline) updateData.deadline = new Date(b.deadline);
+      if (b.reward) {
+        updateData.rewardText = b.reward;
+        updateData.rewardUsd = parseRewardUsd(b.reward, prices);
+      }
+      await this.prisma.bounty.update({ where: { uid }, data: updateData as any });
+      return false;
+    }
     await this.prisma.bounty.create({
       data: {
         uid,
@@ -47,15 +57,18 @@ export class BountyRepository {
     });
   }
 
-  /** Randomised drop from eligible bounties, capped per source. */
+  /** Randomised drop from eligible bounties, capped per source. Excludes previously featured and recently posted. */
   async forDrop(limit = 12) {
     const now = new Date();
     const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
+    const cooldownDays = parseInt(process.env.BOUNTY_COOLDOWN_DAYS ?? '7', 10);
     const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);
+    const cooldownDate = new Date(now.getTime() - cooldownDays * 86_400_000);
 
     const candidates = await this.prisma.bounty.findMany({
       where: {
         status: 'open',
+        includedInDrop: false,
         deadline: { gte: now },
         firstSeen: { gte: minFirstSeen },
         tags: { not: { contains: 'job' } },
@@ -63,6 +76,10 @@ export class BountyRepository {
           gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
           lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
         },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
       },
       orderBy: [{ rewardUsd: 'desc' }, { deadline: 'asc' }],
       take: limit * 6,
@@ -88,11 +105,13 @@ export class BountyRepository {
     return result;
   }
 
-  /** Randomised job drop, capped per source. */
+  /** Randomised job drop, capped per source. Excludes recently posted. */
   async forDropJobs(limit = 8) {
     const now = new Date();
     const maxAgeDays = parseInt(process.env.BOUNTY_MAX_AGE_DAYS ?? '180', 10);
+    const cooldownDays = parseInt(process.env.BOUNTY_COOLDOWN_DAYS ?? '7', 10);
     const minFirstSeen = new Date(now.getTime() - maxAgeDays * 86_400_000);
+    const cooldownDate = new Date(now.getTime() - cooldownDays * 86_400_000);
 
     const candidates = await this.prisma.bounty.findMany({
       where: {
@@ -104,6 +123,10 @@ export class BountyRepository {
           gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
           lte: parseFloat(process.env.BOUNTY_MAX_USD ?? '200000'),
         },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
       },
       orderBy: [{ rewardUsd: 'desc' }, { deadline: 'asc' }],
       take: limit * 6,
@@ -128,7 +151,7 @@ export class BountyRepository {
     return result;
   }
 
-  /** Pick one high-value un-featured bounty (firstSeen < 30d, top 3, random). */
+  /** Pick one high-value un-featured bounty (lastSeen < 30d, top 3, random). */
   async forTopPick(): Promise<{
     bounty: {
       uid: string; title: string; host: string; rewardText: string;
@@ -138,27 +161,33 @@ export class BountyRepository {
     poolResets: boolean;
   } | null> {
     const now = new Date();
-    const minFirstSeen = new Date(now.getTime() - 30 * 86_400_000);
+    const cooldownDays = parseInt(process.env.BOUNTY_COOLDOWN_DAYS ?? '7', 10);
+    const minLastSeen = new Date(now.getTime() - 30 * 86_400_000);
+    const cooldownDate = new Date(now.getTime() - cooldownDays * 86_400_000);
 
     const candidates = await this.prisma.bounty.findMany({
       where: {
         status: 'open',
         includedInDrop: false,
         deadline: { gte: now },
-        firstSeen: { gte: minFirstSeen },
+        lastSeen: { gte: minLastSeen },
         tags: { not: { contains: 'job' } },
         rewardUsd: {
           gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
         },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
       },
-      orderBy: [{ rewardUsd: 'desc' }, { firstSeen: 'desc' }],
+      orderBy: [{ rewardUsd: 'desc' }, { lastSeen: 'desc' }],
       take: 3,
     });
 
     return this.pickAndMark(candidates);
   }
 
-  /** Pick one un-featured bounty closing within 72h (firstSeen < 60d). */
+  /** Pick one un-featured bounty closing within 72h (lastSeen < 60d). */
   async forClosingSoonFeed(): Promise<{
     bounty: {
       uid: string; title: string; host: string; rewardText: string;
@@ -168,16 +197,22 @@ export class BountyRepository {
     poolResets: boolean;
   } | null> {
     const now = new Date();
-    const minFirstSeen = new Date(now.getTime() - 60 * 86_400_000);
+    const cooldownDays = parseInt(process.env.BOUNTY_COOLDOWN_DAYS ?? '7', 10);
+    const minLastSeen = new Date(now.getTime() - 60 * 86_400_000);
     const until = new Date(now.getTime() + 72 * 3_600_000);
+    const cooldownDate = new Date(now.getTime() - cooldownDays * 86_400_000);
 
     const candidates = await this.prisma.bounty.findMany({
       where: {
         status: 'open',
         includedInDrop: false,
         deadline: { gte: now, lte: until },
-        firstSeen: { gte: minFirstSeen },
+        lastSeen: { gte: minLastSeen },
         tags: { not: { contains: 'job' } },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
       },
       orderBy: { deadline: 'asc' },
       take: 3,
@@ -186,7 +221,44 @@ export class BountyRepository {
     return this.pickAndMark(candidates);
   }
 
-  /** Pick one un-featured bounty listed within 48h. */
+  /** Pick one un-featured bounty last seen between 3 and 14 days ago (active sweet spot). */
+  async forActivePick(): Promise<{
+    bounty: {
+      uid: string; title: string; host: string; rewardText: string;
+      rewardUsd: number | null; deadline: Date | null; tags: string;
+      source: string; url: string;
+    };
+    poolResets: boolean;
+  } | null> {
+    const now = new Date();
+    const cooldownDays = parseInt(process.env.BOUNTY_COOLDOWN_DAYS ?? '7', 10);
+    const minLastSeen = new Date(now.getTime() - 14 * 86_400_000);
+    const maxLastSeen = new Date(now.getTime() - 3 * 86_400_000);
+    const cooldownDate = new Date(now.getTime() - cooldownDays * 86_400_000);
+
+    const candidates = await this.prisma.bounty.findMany({
+      where: {
+        status: 'open',
+        includedInDrop: false,
+        deadline: { gte: now },
+        lastSeen: { gte: minLastSeen, lte: maxLastSeen },
+        tags: { not: { contains: 'job' } },
+        rewardUsd: {
+          gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
+        },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
+      },
+      orderBy: [{ rewardUsd: 'desc' }, { lastSeen: 'desc' }],
+      take: 3,
+    });
+
+    return this.pickAndMark(candidates);
+  }
+
+  /** Pick one un-featured bounty last seen within 48h. */
   async forFreshFind(): Promise<{
     bounty: {
       uid: string; title: string; host: string; rewardText: string;
@@ -196,20 +268,26 @@ export class BountyRepository {
     poolResets: boolean;
   } | null> {
     const now = new Date();
-    const minFirstSeen = new Date(now.getTime() - 48 * 3_600_000);
+    const cooldownDays = parseInt(process.env.BOUNTY_COOLDOWN_DAYS ?? '7', 10);
+    const minLastSeen = new Date(now.getTime() - 48 * 3_600_000);
+    const cooldownDate = new Date(now.getTime() - cooldownDays * 86_400_000);
 
     const candidates = await this.prisma.bounty.findMany({
       where: {
         status: 'open',
         includedInDrop: false,
         deadline: { gte: now },
-        firstSeen: { gte: minFirstSeen },
+        lastSeen: { gte: minLastSeen },
         tags: { not: { contains: 'job' } },
         rewardUsd: {
           gte: parseFloat(process.env.BOUNTY_MIN_USD ?? '200'),
         },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
       },
-      orderBy: [{ rewardUsd: 'desc' }, { firstSeen: 'desc' }],
+      orderBy: [{ rewardUsd: 'desc' }, { lastSeen: 'desc' }],
       take: 3,
     });
 
@@ -256,8 +334,13 @@ export class BountyRepository {
 
     let poolResets = false;
     if (remaining < 5) {
+      // Only reset bounties the source has confirmed recently to avoid recycling stale content
+      const poolResetCutoff = new Date(Date.now() - 30 * 86_400_000);
       await this.prisma.bounty.updateMany({
-        where: { includedInDrop: true },
+        where: {
+          includedInDrop: true,
+          lastSeen: { gte: poolResetCutoff },
+        },
         data: { includedInDrop: false },
       });
       poolResets = true;
@@ -319,6 +402,22 @@ export class BountyRepository {
     return this.prisma.bounty.updateMany({
       where: { uid: { in: uids } },
       data: { alertedClosingSoon: true },
+    });
+  }
+
+  /** Mark bounties as featured in a daily/job drop so they skip future rotations until pool reset. */
+  async markDropFeatured(uids: string[]): Promise<void> {
+    await this.prisma.bounty.updateMany({
+      where: { uid: { in: uids } },
+      data: { includedInDrop: true },
+    });
+  }
+
+  /** Record when a bounty was last posted to enforce cooldown. */
+  async updateLastPostedAt(uid: string): Promise<void> {
+    await this.prisma.bounty.update({
+      where: { uid },
+      data: { lastPostedAt: new Date() },
     });
   }
 

@@ -27,7 +27,7 @@ export class HourlyFeedService {
     this.running = true;
     try {
       const hour = new Date().getHours();
-      const category = hour % 3; // 0=Top Pick, 1=Closing Soon, 2=Fresh Find
+      const category = hour % 4; // 0=Top Pick, 1=Closing Soon, 2=Fresh Find, 3=Active Pick (3-14d)
 
       let result = await this.tryCategory(category);
       if (!result) {
@@ -65,6 +65,8 @@ export class HourlyFeedService {
         return this.doClosingSoon();
       case 2:
         return this.doFreshFind();
+      case 3:
+        return this.doActivePick();
       default:
         return null;
     }
@@ -83,6 +85,7 @@ export class HourlyFeedService {
     const tweet = ai ?? this.defaultTopPickTweet(bounty);
 
     await this.repo.logBountyPost(bounty.uid, 'hourly-top-pick');
+    await this.repo.updateLastPostedAt(bounty.uid);
     return { header: 'TOP PICK DRAFT', tweet, poolResets, title: bounty.title };
   }
 
@@ -98,6 +101,7 @@ export class HourlyFeedService {
     const tweet = ai ?? this.defaultClosingSoonTweet(bounty);
 
     await this.repo.logBountyPost(bounty.uid, 'hourly-closing-soon');
+    await this.repo.updateLastPostedAt(bounty.uid);
     return { header: 'CLOSING SOON DRAFT', tweet, poolResets, title: bounty.title };
   }
 
@@ -113,7 +117,25 @@ export class HourlyFeedService {
     const tweet = ai ?? this.defaultFreshFindTweet(bounty);
 
     await this.repo.logBountyPost(bounty.uid, 'hourly-fresh-find');
+    await this.repo.updateLastPostedAt(bounty.uid);
     return { header: 'FRESH FIND DRAFT', tweet, poolResets, title: bounty.title };
+  }
+
+  private async doActivePick(): Promise<{
+    header: string; tweet: string; poolResets: boolean; title: string;
+  } | null> {
+    const result = await this.repo.forActivePick();
+    if (!result) return null;
+
+    const { bounty, poolResets } = result;
+    bounty.url = normaliseUrl(bounty.url);
+    const pageContent = await this.fetcher.fetch(bounty.url);
+    const ai = await this.writer.activePick(bounty, pageContent);
+    const tweet = ai ?? this.defaultActivePickTweet(bounty);
+
+    await this.repo.logBountyPost(bounty.uid, 'hourly-active-pick');
+    await this.repo.updateLastPostedAt(bounty.uid);
+    return { header: 'ACTIVE PICK DRAFT', tweet, poolResets, title: bounty.title };
   }
 
   private defaultTopPickTweet(b: {
@@ -172,6 +194,24 @@ export class HourlyFeedService {
     if (tags) parts.push(tags);
     const details = parts.length ? `\n\n${parts.join('\n')}` : '';
     let tweet = `🆕 NEW BOUNTY: ${b.title}${details}\n\n🔗 ${normaliseUrl(b.url)}`;
+    if (tweet.length > 280) tweet = tweet.slice(0, 279) + '…';
+    return tweet;
+  }
+
+  private defaultActivePickTweet(b: {
+    title: string; host: string; rewardText: string; rewardUsd: number | null;
+    deadline: Date | null; tags: string; url: string;
+  }): string {
+    const parts: string[] = [];
+    if (b.host) parts.push(`🏢 ${b.host}`);
+    if (b.rewardText || b.rewardUsd) {
+      parts.push(`💰 ${b.rewardText || `$${b.rewardUsd!.toLocaleString()}`}`);
+    }
+    if (b.deadline) parts.push(`⏳ ${b.deadline.toISOString().slice(0, 10)}`);
+    const tags = b.tags ? `🏷️ ${b.tags.split(',').filter(Boolean).slice(0, 3).join(', ')}` : '';
+    if (tags) parts.push(tags);
+    const details = parts.length ? `\n\n${parts.join('\n')}` : '';
+    let tweet = `✅ STILL ACTIVE: ${b.title}${details}\n\n🔗 ${normaliseUrl(b.url)}`;
     if (tweet.length > 280) tweet = tweet.slice(0, 279) + '…';
     return tweet;
   }

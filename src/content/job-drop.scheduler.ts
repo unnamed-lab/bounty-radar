@@ -73,6 +73,7 @@ export class JobDropScheduler {
     await this.tg.sendThread(tweets, 'JOB DROP');
     for (const b of jobs) {
       await this.repo.logBountyPost(b.uid, 'job-drop').catch(() => {});
+      await this.repo.updateLastPostedAt(b.uid).catch(() => {});
     }
     this.logger.log(`job drop drafted — ${tweets.length} tweets`);
   }

@@ -49,9 +49,12 @@ export class DigestService {
     const aiCTA = await this.writer.dailyDropCTA();
     const cta = aiCTA ?? this.defaultCTA();
 
-    // Log every bounty featured in this drop
+    // Mark featured + log every bounty in this drop
+    const uids = bounties.map((b) => b.uid);
+    await this.repo.markDropFeatured(uids).catch(() => {});
     for (const b of bounties) {
       await this.repo.logBountyPost(b.uid, 'daily-drop').catch(() => {});
+      await this.repo.updateLastPostedAt(b.uid).catch(() => {});
     }
 
     return [hook, ...body, cta];

@@ -1,92 +1,49 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { BrowserService } from '../scraper/browser.service';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { BountySource } from './bounty-source.interface';
 import { Bounty } from '../domain/bounty';
 
-const URL = 'https://www.bountycaster.xyz/';
+const API_URL = 'https://www.bountycaster.xyz/api/v1/bounties/open';
 
 @Injectable()
 export class BountycasterSource implements BountySource {
   readonly name = 'bountycaster';
   private readonly logger = new Logger(BountycasterSource.name);
 
-  constructor(private readonly browser: BrowserService) {}
+  constructor(private readonly http: HttpService) {}
 
   async fetch(): Promise<Bounty[]> {
     try {
-      return await this.browser.withPage(async (page) => {
-        this.logger.log(`Navigating to ${URL}...`);
-        await page.goto(URL, {
-          waitUntil: 'domcontentloaded',
-          timeout: 30_000,
-        });
+      const { data } = await firstValueFrom(
+        this.http.get(API_URL, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          timeout: 15_000,
+        }),
+      );
 
-        // Let the client-side hydrate the list
-        await page.waitForTimeout(4000);
+      const items = Array.isArray(data?.bounties) ? data.bounties : [];
+      if (!items.length) {
+        this.logger.warn('Bountycaster API returned 0 bounties — likely requires Farcaster/Privy auth');
+        return [];
+      }
 
-        // Scrape listings cards if they exist
-        return page.evaluate(() => {
-          // Bountycaster uses a list of casts or cards containing bounty links
-          const cards = Array.from(document.querySelectorAll('div.border, div.rounded-lg, li, tr'));
-          const results: any[] = [];
-
-          for (const card of cards) {
-            const linkEl = card.querySelector('a[href*="/bounty/"], a[href*="/bounties/"], a[href*="/casts/"]');
-            if (!linkEl) continue;
-
-            const url = (linkEl as HTMLAnchorElement).href;
-            if (!url || results.some((r) => r.url === url)) continue;
-
-            // Try to extract title and reward from text content
-            const text = card.textContent?.trim() || '';
-            const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-            const title = lines[0] || 'Untitled Farcaster Bounty';
-            
-            // Try to extract reward (e.g. looking for currency symbols or USD/USDC/ETH/SOL)
-            let reward = '';
-            const rewardMatch = text.match(/(?:\$|💰|USD|USDC|ETH|SOL|DEGEN)\s*\d+(?:,\d+)*(?:\.\d+)?/i);
-            if (rewardMatch) {
-              reward = rewardMatch[0];
-            }
-
-            results.push({
-              source: 'bountycaster',
-              title,
-              url,
-              reward,
-              deadline: undefined,
-              tags: ['farcaster'],
-              host: 'Farcaster',
-            });
-          }
-
-          // Fallback to checking all anchor links if cards are not standard
-          if (results.length === 0) {
-            const links = Array.from(document.querySelectorAll('a'));
-            for (const a of links) {
-              const href = a.href;
-              if (href && (href.includes('/bounty/') || href.includes('/casts/'))) {
-                const text = a.innerText.trim();
-                if (text && !results.some((r) => r.url === href)) {
-                  results.push({
-                    source: 'bountycaster',
-                    title: text,
-                    url: href,
-                    reward: '',
-                    deadline: undefined,
-                    tags: ['farcaster'],
-                    host: 'Farcaster',
-                  });
-                }
-              }
-            }
-          }
-
-          return results;
-        });
-      });
+      return items.map(
+        (it: any): Bounty => ({
+          source: this.name,
+          title: it.title ?? 'Untitled Farcaster Bounty',
+          url: `https://www.bountycaster.xyz/bounty/${it.id ?? ''}`,
+          reward: it.rewardAmount ?? '',
+          deadline: it.deadline ? new Date(it.deadline).toISOString() : undefined,
+          tags: ['farcaster'],
+          host: it.poster?.username ?? 'Farcaster',
+        }),
+      );
     } catch (err) {
-      this.logger.error(`Failed to scrape Bountycaster: ${(err as Error).message}`);
+      this.logger.warn(`Bountycaster API unreachable (requires auth): ${(err as Error).message}`);
       return [];
     }
   }
