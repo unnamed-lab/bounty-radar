@@ -79,6 +79,12 @@ export class HourlyFeedService {
     if (!result) return null;
 
     const { bounty, poolResets } = result;
+
+    if (await this.repo.wasRecentlyPosted(bounty.uid, 'hourly-top-pick')) {
+      this.logger.warn(`Top Pick "${bounty.title}" was already posted recently, skipping`);
+      return null;
+    }
+
     bounty.url = normaliseUrl(bounty.url);
     const pageContent = await this.fetcher.fetch(bounty.url);
     const ai = await this.writer.featuredBounty(bounty, pageContent);
@@ -96,6 +102,12 @@ export class HourlyFeedService {
     if (!result) return null;
 
     const { bounty, poolResets } = result;
+
+    if (await this.repo.wasRecentlyPosted(bounty.uid, 'hourly-closing-soon')) {
+      this.logger.warn(`Closing Soon "${bounty.title}" was already posted recently, skipping`);
+      return null;
+    }
+
     bounty.url = normaliseUrl(bounty.url);
     const ai = await this.writer.closingSoon(bounty);
     const tweet = ai ?? this.defaultClosingSoonTweet(bounty);
@@ -112,6 +124,12 @@ export class HourlyFeedService {
     if (!result) return null;
 
     const { bounty, poolResets } = result;
+
+    if (await this.repo.wasRecentlyPosted(bounty.uid, 'hourly-fresh-find')) {
+      this.logger.warn(`Fresh Find "${bounty.title}" was already posted recently, skipping`);
+      return null;
+    }
+
     bounty.url = normaliseUrl(bounty.url);
     const ai = await this.writer.freshFind(bounty);
     const tweet = ai ?? this.defaultFreshFindTweet(bounty);
@@ -128,6 +146,12 @@ export class HourlyFeedService {
     if (!result) return null;
 
     const { bounty, poolResets } = result;
+
+    if (await this.repo.wasRecentlyPosted(bounty.uid, 'hourly-active-pick')) {
+      this.logger.warn(`Active Pick "${bounty.title}" was already posted recently, skipping`);
+      return null;
+    }
+
     bounty.url = normaliseUrl(bounty.url);
     const pageContent = await this.fetcher.fetch(bounty.url);
     const ai = await this.writer.activePick(bounty, pageContent);

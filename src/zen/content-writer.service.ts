@@ -370,6 +370,37 @@ Separate each tweet with "---" on its own line. Output only the thread.`;
     return parts.length >= 3 ? parts : null;
   }
 
+  async digestThread(
+    bounties: Array<{
+      title: string; host: string; rewardText: string;
+      rewardUsd: number | null; deadline: Date | null; url: string;
+    }>,
+  ): Promise<string[] | null> {
+    const items = bounties.map((b, i) =>
+      `${i + 1}. ${b.title} | Reward: ${b.rewardText || (b.rewardUsd ? `$${b.rewardUsd.toLocaleString()}` : 'N/A')} | Host: ${b.host || 'N/A'} | Deadline: ${b.deadline ? b.deadline.toISOString().slice(0, 10) : 'N/A'} | ${b.url}`
+    ).join('\n');
+
+    const prompt = `Write an X thread showcasing ${bounties.length} open web3 bounties that builders can enter right now.
+
+UK English. No em dashes. No hashtags.
+
+HERE ARE THE BOUNTIES:
+${items}
+
+Structure:
+- Tweet 1: Compelling hook introducing this roundup of ${bounties.length} live opportunities. Mention the total value if impressive.
+- Tweets 2-${bounties.length}: One short tweet per bounty (each max 280 chars), varied descriptions. Include the link in each tweet.
+- Tweet ${bounties.length + 1}: CTA — ask readers to reply with which one they would enter, RT to share, and follow ${this.handle} for daily drops and updates.
+
+Separate each tweet with "---" on its own line. Output only the thread. No explanation.`;
+
+    const result = await this.zen.generate(prompt, { maxTokens: 10000 });
+    if (!result) return null;
+
+    const parts = result.split(/---/).map((s) => s.trim()).filter(Boolean);
+    return parts.length >= 3 ? parts : null;
+  }
+
   async stats(
     total: number,
     count: number,

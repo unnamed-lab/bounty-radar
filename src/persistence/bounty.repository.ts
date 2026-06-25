@@ -294,6 +294,54 @@ export class BountyRepository {
     return this.pickAndMark(candidates);
   }
 
+  /** Pick 5-7 high-value bounties for a curated digest thread. */
+  async forThreadDigest(count = 6): Promise<Array<{
+    uid: string; title: string; host: string; rewardText: string;
+    rewardUsd: number | null; deadline: Date | null; tags: string;
+    source: string; url: string;
+  }>> {
+    const now = new Date();
+    const cooldownDays = parseInt(process.env.BOUNTY_COOLDOWN_DAYS ?? '7', 10);
+    const cooldownDate = new Date(now.getTime() - cooldownDays * 86_400_000);
+    const minUsd = parseFloat(process.env.BOUNTY_MIN_USD ?? '200');
+
+    const bounties = await this.prisma.bounty.findMany({
+      where: {
+        status: 'open',
+        deadline: { gte: now },
+        tags: { not: { contains: 'job' } },
+        rewardUsd: { gte: minUsd },
+        lastSeen: { gte: new Date(now.getTime() - 60 * 86_400_000) },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
+      },
+      orderBy: [{ rewardUsd: 'desc' }, { lastSeen: 'desc' }],
+      take: count + 4,
+    });
+
+    if (bounties.length >= 4) return bounties.slice(0, count);
+
+    const fallback = await this.prisma.bounty.findMany({
+      where: {
+        status: 'open',
+        deadline: { gte: now },
+        tags: { not: { contains: 'job' } },
+        rewardUsd: { gte: 50 },
+        lastSeen: { gte: new Date(now.getTime() - 90 * 86_400_000) },
+        OR: [
+          { lastPostedAt: null },
+          { lastPostedAt: { lt: cooldownDate } },
+        ],
+      },
+      orderBy: [{ rewardUsd: 'desc' }, { lastSeen: 'desc' }],
+      take: count,
+    });
+
+    return fallback;
+  }
+
   /** Mark a random candidate as featured. Reset pool if < 5 eligible remain. */
   private async pickAndMark(
     candidates: Array<{
@@ -351,6 +399,15 @@ export class BountyRepository {
     }
 
     return { bounty: chosen, poolResets };
+  }
+
+  /** Check if a bounty was posted to a feed within the last N hours. */
+  async wasRecentlyPosted(bountyUid: string, feed: string, hours = 2): Promise<boolean> {
+    const since = new Date(Date.now() - hours * 3_600_000);
+    const count = await this.prisma.bountyPost.count({
+      where: { bountyUid, feed, postedAt: { gte: since } },
+    });
+    return count > 0;
   }
 
   /** Log that a bounty was posted to a feed. */

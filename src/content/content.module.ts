@@ -11,6 +11,7 @@ import { HourlyFeedService } from './hourly-feed.service';
 import { WeeklyRecapService } from './weekly-recap.service';
 import { EngagementService } from './engagement.service';
 import { TipsService } from './tips.service';
+import { ThreadDigestService } from './thread-digest.service';
 
 @Module({
   imports: [TelegramModule, ZenModule],
@@ -25,6 +26,7 @@ import { TipsService } from './tips.service';
     WeeklyRecapService,
     EngagementService,
     TipsService,
+    ThreadDigestService,
   ],
 })
 export class ContentModule {}
